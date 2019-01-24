@@ -14,17 +14,19 @@ if(PYTHONLIBS_FOUND)
     include_directories(${PYTHON_INCLUDE_DIRS})
 endif()
 
-find_library(LAME_FOUND mp3lame lame)
-if(NOT LAME_FOUND)
+find_path(LAME_INCLUDE_DIRS lame/lame.h)
+find_library(LAME_LIBRARIES mp3lame lame)
+if(NOT LAME_LIBRARIES)
     message(FATAL_ERROR "Require lame lab")
 else()
+    include_directories(${LAME_INCLUDE_DIRS})
     message(STATUS "Found Lame: ${LAME_FOUND}")
 endif()
 
 add_subdirectory("pybind11")
 
 add_library(pylame MODULE encoder.cpp)
-target_link_libraries(pylame PUBLIC mp3lame
+target_link_libraries(pylame PUBLIC ${LAME_LIBRARIES}
                            PRIVATE pybind11::module)
 set_target_properties(pylame PROPERTIES
                            PREFIX "${PYTHON_MODULE_PREFIX}"
