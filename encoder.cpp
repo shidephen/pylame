@@ -2,6 +2,7 @@
 #include<stdexcept>
 #include<iostream>
 #include<cstdio>
+#include<cstring>
 #include<pybind11/pybind11.h>
 #include<pybind11/numpy.h>
 
@@ -12,7 +13,8 @@ extern "C"
 #include<lame/lame.h>
 }
 
-#define MP3_BUF_SIZE 8192
+// 256KB
+#define MP3_BUF_SIZE 1024 * 256
 
 namespace{
 void debug_out(const char* format, va_list ap){
@@ -33,6 +35,7 @@ class MP3Encoder
 {
 public:
     MP3Encoder(size_t samplerate, size_t bitrate, size_t channels)
+    : m_channels(channels), m_samplerate(samplerate), m_bitrate(bitrate)
     {
         int ret;
         m_settings = lame_init();
@@ -40,7 +43,7 @@ public:
         lame_set_num_channels(m_settings, channels);
         lame_set_in_samplerate(m_settings, samplerate);
         lame_set_brate(m_settings, bitrate);
-        lame_set_quality(m_settings, 2);
+        lame_set_quality(m_settings, 5);
 
         // Debug output
         lame_set_errorf(m_settings, &error_out);
@@ -52,8 +55,9 @@ public:
             throw new invalid_argument("Some parameter is invalid");
     }
 
-
     ~MP3Encoder(){
+        if(m_encoded_buffer != nullptr)
+            delete[] m_encoded_buffer;
         lame_close(m_settings);
     }
     
@@ -62,55 +66,30 @@ public:
     {
         auto in_buf = input.request();
         auto in_ptr = (int16_t*)in_buf.ptr;
-        size_t num_frame = in_buf.size/2;
-        auto *encode_buf = 
-            new uint8_t[(size_t)(in_buf.size * 0.625) + 7200];
+        size_t num_frame = in_buf.size/m_channels;
+        size_t outbuf_size = (size_t)(in_buf.size * 1.25 / m_channels) + 7200;
+        realloc_buffer(outbuf_size);
         
         // =============== Lame Proc ===================
 
-        size_t sample_num = num_frame * 2;
+        size_t sample_num = in_buf.size;
         size_t input_pos = 0, encoded_size = 0;
-        uint8_t* tmp_buf = new uint8_t[MP3_BUF_SIZE*2];
 
-        for(size_t input_pos=0, i=0; input_pos < sample_num;
-            input_pos += MP3_BUF_SIZE*2, i+=1){
-            
-            size_t input_size;
-
-            if(input_pos + MP3_BUF_SIZE*2 < sample_num)
-                input_size = MP3_BUF_SIZE;
-            else
-                input_size = num_frame - input_pos / 2;
-            
-            int ret = lame_encode_buffer_interleaved(m_settings,
-                in_ptr + input_pos, input_size,
-                tmp_buf, MP3_BUF_SIZE*2);
-            
-            if(ret > 0){
-                copy_n(tmp_buf, ret, encode_buf+encoded_size);
-                encoded_size += ret;
-            }else{
-                cout << "Warning encoded ret: " << ret << endl;
-            }
-        }
+        int ret = lame_encode_buffer_interleaved(m_settings,
+                in_ptr, num_frame,
+                m_encoded_buffer, outbuf_size);
+        assert(ret >= 0);
         
-        // Get last buffer bytes
-        int ret = lame_encode_flush_nogap(m_settings, tmp_buf, MP3_BUF_SIZE*2);
-        if(ret > 0){
-            copy_n(tmp_buf, ret, encode_buf+encoded_size);
-            encoded_size += ret;
-        }
-
-        delete[] tmp_buf;
+        int rest = lame_encode_flush_nogap(m_settings, m_encoded_buffer+ret, outbuf_size - ret);
+        assert(rest >= 0);
 
         // =========================================
         
-        pybind11::array_t<uint8_t> result{encoded_size};
+        pybind11::array_t<uint8_t> result{(size_t)(ret + rest)};
         auto out_buf = result.request(true);
         auto out_ptr = (uint8_t*)out_buf.ptr;
 
-        copy_n(encode_buf, encoded_size, out_ptr);
-        delete[] encode_buf;
+        memcpy(out_ptr, m_encoded_buffer, ret + rest);
 
         return result;
     }
@@ -138,7 +117,9 @@ public:
         lame_set_num_channels(m_settings, channels);
         int ret = lame_init_params(m_settings);
         if(ret < 0)
-            throw new invalid_argument("Invalid bit rate");
+            throw new invalid_argument("Invalid channel number");
+
+        m_channels = channels;
     }
     size_t ChannelNum() {
         return lame_get_num_channels(m_settings);
@@ -146,6 +127,21 @@ public:
 private:
     size_t m_samplerate, m_bitrate, m_channels;
     lame_t m_settings;
+
+    uint8_t *m_encoded_buffer;
+    size_t m_encoded_buffer_size = MP3_BUF_SIZE;
+
+    void realloc_buffer(size_t outsize) {
+        if(outsize > m_encoded_buffer_size) {
+            if(m_encoded_buffer != nullptr) {
+                delete[] m_encoded_buffer;
+                m_encoded_buffer = nullptr;
+
+            }
+            m_encoded_buffer = new uint8_t[outsize];
+            m_encoded_buffer_size = outsize;
+        }
+    }
 };
 
 PYBIND11_MODULE(pylame, m)
