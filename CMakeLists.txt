@@ -20,7 +20,7 @@ if(NOT LAME_LIBRARIES)
     message(FATAL_ERROR "Require lame lab")
 else()
     include_directories(${LAME_INCLUDE_DIRS})
-    message(STATUS "Found Lame: ${LAME_FOUND}")
+    message(STATUS "Found Lame: ${LAME_LIBRARIES}")
 endif()
 
 add_subdirectory("pybind11")
