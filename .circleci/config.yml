@@ -1,0 +1,17 @@
+version: 2
+jobs:
+  build:
+    docker:
+      - image: circleci/python:3.6-stretch-node-browsers-legacy
+    steps:
+      - checkout
+      - run: git submodule sync
+      - run: git submodule update --init 
+      - run:
+          name: add-buildtools
+          command: sudo apt install cmake libmp3lame-dev
+      - run:
+          name: build
+          command: 'cmake -DCMAKE_BUILD_TYPE=Release . && make && mv *.so ./pylame && python setup.py bdist_wheel'
+      - store_artifacts:
+          path: dist
