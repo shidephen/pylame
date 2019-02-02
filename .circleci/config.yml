@@ -26,10 +26,9 @@ jobs:
       - checkout
       - attach_workspace:
           at: ./
-      - run:
-          name: install mp3lame library
-          command: sudo apt install libmp3lame0
+      - run: sudo apt install libmp3lame0
       - run: pip install --user `ls dist/*.whl`
+      - run: pip install --user numpy
       - run: cd tests && python test.py
 
 workflows:
