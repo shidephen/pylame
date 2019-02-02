@@ -8,10 +8,7 @@
 
 using namespace std;
 
-extern "C"
-{
 #include<lame/lame.h>
-}
 
 // 256KB
 #define MP3_BUF_SIZE 1024 * 256
@@ -28,6 +25,16 @@ void error_out(const char* format, va_list ap){
 void info_out(const char* format, va_list ap){
     printf(format, ap);
 }
+
+void throw_exception(int retcode) {
+    if(retcode == -2) {
+        throw new bad_alloc;
+    } else if(retcode == -4) {
+        throw new runtime_error("Pychoacoustic error");
+    } else if(retcode < 0) {
+        throw new length_error("Buffer error");
+    }
+}
 }
 
 
@@ -40,8 +47,13 @@ public:
         int ret;
         m_settings = lame_init();
 
+        lame_set_asm_optimizations(m_settings, SSE, 1);
+        lame_set_asm_optimizations(m_settings, MMX, 1);
+
         lame_set_num_channels(m_settings, channels);
+        lame_set_mode(m_settings, channels == 1 ? MONO : STEREO);
         lame_set_in_samplerate(m_settings, samplerate);
+        lame_set_out_samplerate(m_settings, samplerate);
         lame_set_brate(m_settings, bitrate);
         lame_set_quality(m_settings, 5);
 
@@ -53,6 +65,8 @@ public:
         ret = lame_init_params(m_settings);
         if(ret < 0)
             throw new invalid_argument("Some parameter is invalid");
+
+        realloc_buffer(MP3_BUF_SIZE);
     }
 
     ~MP3Encoder(){
@@ -71,17 +85,14 @@ public:
         realloc_buffer(outbuf_size);
         
         // =============== Lame Proc ===================
-
-        size_t sample_num = in_buf.size;
-        size_t input_pos = 0, encoded_size = 0;
-
         int ret = lame_encode_buffer_interleaved(m_settings,
                 in_ptr, num_frame,
                 m_encoded_buffer, outbuf_size);
-        assert(ret >= 0);
+
+        throw_exception(ret);
         
-        int rest = lame_encode_flush_nogap(m_settings, m_encoded_buffer+ret, outbuf_size - ret);
-        assert(rest >= 0);
+        int rest = lame_encode_flush(m_settings, m_encoded_buffer+ret, outbuf_size - ret);
+        throw_exception(ret);
 
         // =========================================
         
@@ -113,14 +124,7 @@ public:
     size_t BitRate(){
         return lame_get_brate(m_settings);
     }
-    void ChannelNum(size_t channels){
-        lame_set_num_channels(m_settings, channels);
-        int ret = lame_init_params(m_settings);
-        if(ret < 0)
-            throw new invalid_argument("Invalid channel number");
 
-        m_channels = channels;
-    }
     size_t ChannelNum() {
         return lame_get_num_channels(m_settings);
     }
@@ -128,8 +132,8 @@ private:
     size_t m_samplerate, m_bitrate, m_channels;
     lame_t m_settings;
 
-    uint8_t *m_encoded_buffer;
-    size_t m_encoded_buffer_size = MP3_BUF_SIZE;
+    uint8_t *m_encoded_buffer = nullptr;
+    size_t m_encoded_buffer_size = 0;
 
     void realloc_buffer(size_t outsize) {
         if(outsize > m_encoded_buffer_size) {
