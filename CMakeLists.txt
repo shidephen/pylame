@@ -25,6 +25,13 @@ endif()
 
 add_subdirectory("pybind11")
 
+message("Current build type: ${CMAKE_BUILD_TYPE}")
+if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+    message("Current build flags: ${CMAKE_CXX_FLAGS_DEBUG}")
+else()
+    message("Current build flags: ${CMAKE_CXX_FLAGS_RELEASE}")
+endif()
+
 add_library(pylame MODULE encoder.cpp)
 target_link_libraries(pylame PUBLIC ${LAME_LIBRARIES}
                            PRIVATE pybind11::module)
