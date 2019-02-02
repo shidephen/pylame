@@ -1,6 +1,9 @@
 # pylame
 Python wrapped of mp3lame encoder
 
+## build status
+[![CircleCI](https://circleci.com/gh/shidephen/pylame.svg?style=svg)](https://circleci.com/gh/shidephen/pylame)
+
 ## Example
 
 ```python
