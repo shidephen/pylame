@@ -83,11 +83,18 @@ public:
         size_t num_frame = in_buf.size/m_channels;
         size_t outbuf_size = (size_t)(in_buf.size * 1.25 / m_channels) + 7200;
         realloc_buffer(outbuf_size);
-        
+
         // =============== Lame Proc ===================
-        int ret = lame_encode_buffer_interleaved(m_settings,
+        int ret = 0;
+        if(m_channels > 1) {
+            ret = lame_encode_buffer_interleaved(m_settings,
                 in_ptr, num_frame,
                 m_encoded_buffer, outbuf_size);
+        } else {
+            ret = lame_encode_buffer(m_settings,
+                in_ptr, nullptr, num_frame,
+                m_encoded_buffer, outbuf_size);
+        }
 
         throw_exception(ret);
         
