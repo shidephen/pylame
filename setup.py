@@ -18,7 +18,7 @@ class CMakeExtension(Extension):
 class CMakeBuild(build_ext):
     def run(self):
         try:
-            out = subprocess.check_output(['cmake', '--version'])
+            out = subprocess.check_output(['cmake3', '--version'])
         except OSError:
             raise RuntimeError("CMake must be installed to build the following extensions: " +
                                ", ".join(e.name for e in self.extensions))
@@ -53,8 +53,8 @@ class CMakeBuild(build_ext):
                                                               self.distribution.get_version())
         if not os.path.exists(self.build_temp):
             os.makedirs(self.build_temp)
-        subprocess.check_call(['cmake', ext.sourcedir] + cmake_args, cwd=self.build_temp, env=env)
-        subprocess.check_call(['cmake', '--build', '.'] + build_args, cwd=self.build_temp)
+        subprocess.check_call(['cmake3', ext.sourcedir] + cmake_args, cwd=self.build_temp, env=env)
+        subprocess.check_call(['cmake3', '--build', '.'] + build_args, cwd=self.build_temp)
 
 
 setup(name='pylame',
